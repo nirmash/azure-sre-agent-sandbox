@@ -16,7 +16,7 @@ The app uses in-cluster MongoDB and RabbitMQ with Azure Managed Disk storage.
 
 - **Infrastructure as Code**: Bicep (modular templates in `infra/bicep/`)
 - **Container Orchestration**: Kubernetes (manifests in `k8s/`)
-- **Scripting**: PowerShell (deployment scripts in `scripts/`)
+- **Scripting**: Bash (macOS/Linux) and PowerShell (Windows) — deployment scripts in `scripts/`
 - **Dev Environment**: Dev Containers with Azure CLI, kubectl, azd
 
 ## Key Directories
@@ -85,6 +85,13 @@ Type `menu` in the terminal to see all available commands. Key shortcuts:
 - `fix-all` - Restore healthy state
 
 ### Deploy Infrastructure
+
+macOS / Linux:
+```bash
+./scripts/deploy.sh -l eastus2 -y
+```
+
+Windows (PowerShell):
 ```powershell
 .\scripts\deploy.ps1 -Location eastus2 -Yes
 ```
@@ -105,6 +112,13 @@ kubectl apply -f k8s/base/application.yaml
 ```
 
 ### Destroy Infrastructure
+
+macOS / Linux:
+```bash
+./scripts/destroy.sh -g "rg-srelab-eastus2"
+```
+
+Windows (PowerShell):
 ```powershell
 .\scripts\destroy.ps1 -ResourceGroupName "rg-srelab-eastus2"
 ```
@@ -127,6 +141,6 @@ kubectl apply -f k8s/base/application.yaml
 
 1. **For Bicep changes**: Follow best practices in `infra/bicep/` patterns
 2. **For K8s manifests**: Use namespace `pets`, label with `sre-demo: breakable`
-3. **For scripts**: Use PowerShell, include error handling, support `-WhatIf`
-4. **For docs**: Keep formatting consistent, include code examples
+3. **For scripts**: Provide both bash (.sh) and PowerShell (.ps1) versions, include error handling
+4. **For docs**: Keep formatting consistent, include both macOS/Linux and Windows examples
 5. **For new scenarios**: Add to `k8s/scenarios/` and update `docs/BREAKABLE-SCENARIOS.md`

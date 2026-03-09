@@ -73,8 +73,8 @@ alias azwho='az account show'
 alias azsub='az account list -o table'
 
 # Demo shortcuts
-alias deploy='pwsh ./scripts/deploy.ps1'
-alias destroy='pwsh ./scripts/destroy.ps1'
+alias deploy='bash ./scripts/deploy.sh'
+alias destroy='bash ./scripts/destroy.sh'
 
 # Break scenarios
 alias break-oom='kubectl apply -f k8s/scenarios/oom-killed.yaml'

@@ -16,10 +16,12 @@ Azure SRE Agent (Preview) is an AI-powered site reliability engineering automati
 
 Before creating an SRE Agent, ensure you have:
 
-- ✅ Deployed the demo lab infrastructure (`scripts/deploy.ps1`)
+- ✅ Deployed the demo lab infrastructure (see Quick Start below)
 - ✅ Access to a supported Azure region (East US 2, Sweden Central, Australia East)
 - ✅ `Microsoft.Authorization/roleAssignments/write` permission
 - ✅ Firewall allows access to `*.azuresre.ai`
+
+> **Quick Start:** Run `./scripts/deploy.sh` (macOS/Linux) or `.\scripts\deploy.ps1` (Windows) to deploy the infrastructure.
 
 ## Step 1: Create an SRE Agent
 
@@ -51,6 +53,16 @@ The SRE Agent needs access to your Azure resources to diagnose and **remediate**
 
 1. Get the SRE Agent's managed identity Object ID from the portal
 2. Run the RBAC configuration script:
+
+**macOS / Linux:**
+
+```bash
+./scripts/configure-rbac.sh \
+    -g "rg-srelab-eastus2" \
+    --sre-agent-principal-id "<sre-agent-object-id>"
+```
+
+**Windows (PowerShell):**
 
 ```powershell
 .\scripts\configure-rbac.ps1 `

@@ -23,6 +23,18 @@ A fully automated Azure environment for demonstrating **Azure SRE Agent** capabi
 
 ### Deploy
 
+**macOS / Linux (bash):**
+
+```bash
+# 1. Login to Azure
+az login --use-device-code
+
+# 2. Deploy infrastructure (~15-25 minutes)
+./scripts/deploy.sh -l eastus2 -y
+```
+
+**Windows (PowerShell):**
+
 ```powershell
 # 1. Login to Azure
 az login --use-device-code
@@ -44,6 +56,14 @@ az login --use-device-code
 ### Validate Deployment
 
 After deployment, verify everything is healthy:
+
+**macOS / Linux:**
+
+```bash
+./scripts/validate-deployment.sh -g "rg-srelab-eastus2"
+```
+
+**Windows (PowerShell):**
 
 ```powershell
 .\scripts\validate-deployment.ps1 -ResourceGroupName "rg-srelab-eastus2"
@@ -111,9 +131,27 @@ See [docs/COSTS.md](docs/COSTS.md) for detailed breakdown and optimization tips.
 
 ## 🛠️ Commands Reference
 
-### Deployment Scripts (PowerShell)
+### Deployment Scripts
 
-> **Note**: These PowerShell scripts deploy to Azure and can be run from the dev container, locally on Windows, or on any system with PowerShell Core installed.
+Scripts are available in both **bash** (macOS/Linux) and **PowerShell** (Windows/cross-platform).
+
+#### macOS / Linux (bash)
+
+| Command | Description |
+|---------|-------------|
+| `./scripts/deploy.sh -l eastus2` | Deploy all infrastructure to Azure |
+| `./scripts/deploy.sh --what-if` | Preview what would be deployed |
+| `./scripts/validate-deployment.sh -g <rg>` | Verify resources and app are healthy |
+| `./scripts/destroy.sh -g <rg>` | Tear down all infrastructure |
+
+**Deploy script parameters (bash):**
+- `-l, --location`: Azure region (`eastus2`, `swedencentral`, `australiaeast`) - Default: `eastus2`
+- `-w, --workload-name`: Resource prefix - Default: `srelab`
+- `--skip-rbac`: Skip RBAC assignments if subscription policies block them
+- `--what-if`: Preview deployment without making changes
+- `-y, --yes`: Skip confirmation prompts (non-interactive mode)
+
+#### Windows (PowerShell)
 
 | Command | Description |
 |---------|-------------|
@@ -122,7 +160,7 @@ See [docs/COSTS.md](docs/COSTS.md) for detailed breakdown and optimization tips.
 | `.\scripts\validate-deployment.ps1 -ResourceGroupName <rg>` | Verify resources and app are healthy |
 | `.\scripts\destroy.ps1 -ResourceGroupName <rg>` | Tear down all infrastructure |
 
-**Deploy script parameters:**
+**Deploy script parameters (PowerShell):**
 - `-Location`: Azure region (`eastus2`, `swedencentral`, `australiaeast`) - Default: `eastus2`
 - `-WorkloadName`: Resource prefix - Default: `srelab`
 - `-SkipRbac`: Skip RBAC assignments if subscription policies block them

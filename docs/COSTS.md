@@ -121,6 +121,13 @@ SRE Agent uses Azure AI Units (AAU) billing:
 ### For Development/Testing
 
 1. **Delete when not in use**
+
+   macOS / Linux:
+   ```bash
+   ./scripts/destroy.sh
+   ```
+
+   Windows (PowerShell):
    ```powershell
    .\scripts\destroy.ps1
    ```
@@ -180,13 +187,13 @@ Use Azure Cost Management to track spending:
 
 ### Sample Budget Alert
 
-```powershell
+```bash
 # Create budget via CLI
-az consumption budget create `
-    --budget-name "sre-demo-budget" `
-    --amount 500 `
-    --time-grain Monthly `
-    --category Cost `
+az consumption budget create \
+    --budget-name "sre-demo-budget" \
+    --amount 500 \
+    --time-grain Monthly \
+    --category Cost \
     --resource-group rg-srelab-eastus2
 ```
 
