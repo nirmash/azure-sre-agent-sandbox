@@ -6,7 +6,9 @@ A ready-to-use prompt and configuration for setting up a recurring daily cost re
 
 ## Overview
 
-This scheduled task queries Azure Cost Management daily, generates a cost breakdown by resource group and service, produces a trend chart, and flags anomalies (spikes or unexpected changes).
+This scheduled task queries Azure Cost Management daily, generates a 7-day cost breakdown by resource group and service, produces trend charts, and flags anomalies (spikes or unexpected changes).
+
+> **Important:** The task uses Python with Azure Managed Identity to call the Cost Management REST API directly. Do **not** use `az rest` or `az cli` commands — they are not available in the SRE Agent scheduled task environment.
 
 ### What It Covers
 
@@ -26,26 +28,27 @@ This scheduled task queries Azure Cost Management daily, generates a cost breakd
 Paste this prompt directly in a conversation with SRE Agent:
 
 ```
-Set up a daily scheduled task at 8:00 AM UTC called "Daily Cost Report" that does the following:
+Set up a daily scheduled task at 8:00 AM UTC called "Daily Cost Report (7-Day)" that does the following:
 
-1. Query Azure Cost Management for the last 24 hours of actual costs, grouped by ResourceGroup and ServiceName, filtered to these resource groups:
+1. Use Python (ExecutePythonCode) with Azure Managed Identity (client_id: 080f7f24-909a-4b05-a1df-8f2d71aa257f) to query the Azure Cost Management REST API for the last 7 days of actual costs, grouped by ResourceGroup and ServiceName (daily granularity), filtered to these resource groups:
    - rg-srelab-eastus2
    - mc_rg-srelab-eastus2_aks-srelab_eastus2
    - rg-sre-demo-w4k9
    - sre-agent-demo-2
 
-2. Also query the last 7 days of daily costs (granularity: Daily) for the same resource groups to show trends.
+2. Also query the same 7-day window grouped by ResourceGroup only (for trend charts).
 
 3. Generate a summary report that includes:
-   - A table of yesterday's costs by resource group and service
-   - A daily trend chart for the past 7 days (stacked area by resource group)
+   - A table of the latest day's costs by resource group and service (with subtotals)
+   - A stacked area chart for the 7-day daily trend by resource group
    - A cumulative cost chart
-   - Comparison of yesterday's total vs. the 7-day average
+   - Comparison of the latest day's total vs. the 7-day average
    - Flag any day where cost exceeded 120% of the 7-day average as an anomaly
+   - Key metrics: daily cost, period average, projected monthly, % change vs previous day
 
 4. Use subscription ID: 93cba93f-571e-44e9-ac0a-a2987b58848c
 
-5. Use the Cost Management REST API via:
+5. Use the Cost Management REST API via Python requests:
    POST https://management.azure.com/subscriptions/{subscriptionId}/providers/Microsoft.CostManagement/query?api-version=2023-11-01
 ```
 
@@ -57,9 +60,9 @@ Set up a daily scheduled task at 8:00 AM UTC called "Daily Cost Report" that doe
 
 | Setting | Value |
 |---|---|
-| **Task Name** | Daily Cost Report |
+| **Task Name** | Daily Cost Report (7-Day) |
 | **Cron Expression** | `0 8 * * *` |
-| **Description** | Daily cost breakdown and anomaly detection for managed resource groups |
+| **Description** | Daily 7-day cost breakdown and anomaly detection for managed resource groups |
 
 4. Use the agent prompt from the [Agent Prompt](#agent-prompt) section below.
 
@@ -69,84 +72,87 @@ Set up a daily scheduled task at 8:00 AM UTC called "Daily Cost Report" that doe
 
 Copy this prompt into the scheduled task's **Agent Prompt** field:
 
-```
+````
 You are running a daily cost report for Azure resources. Follow these steps precisely:
 
-## Step 1: Query Yesterday's Costs
+## Step 1: Query Last 7 Days of Costs Using Python
 
-Use `az rest --method post` against the Cost Management API:
-- URL: https://management.azure.com/subscriptions/93cba93f-571e-44e9-ac0a-a2987b58848c/providers/Microsoft.CostManagement/query?api-version=2023-11-01
-- Body:
-  {
-    "type": "ActualCost",
-    "timeframe": "Custom",
-    "timePeriod": {
-      "from": "<yesterday_start_UTC>",
-      "to": "<today_start_UTC>"
-    },
-    "dataset": {
-      "granularity": "None",
-      "aggregation": { "totalCost": { "name": "Cost", "function": "Sum" } },
-      "grouping": [
-        { "type": "Dimension", "name": "ResourceGroup" },
-        { "type": "Dimension", "name": "ServiceName" }
-      ],
-      "filter": {
-        "dimensions": {
-          "name": "ResourceGroup",
-          "operator": "In",
-          "values": [
-            "rg-srelab-eastus2",
-            "mc_rg-srelab-eastus2_aks-srelab_eastus2",
-            "rg-sre-demo-w4k9",
-            "sre-agent-demo-2"
-          ]
-        }
-      }
-    }
-  }
+Use ExecutePythonCode with Azure Managed Identity to query the Cost Management REST API directly. Do NOT use `az rest` or `az cli` commands — they are not supported in this environment.
 
-## Step 2: Query 7-Day Trend
+```python
+from azure.identity import ManagedIdentityCredential
+import requests, json
+from datetime import datetime, timedelta
 
-Same API, but with:
-- timePeriod: last 7 days
-- granularity: "Daily"
-- grouping: ResourceGroup only (remove ServiceName)
-- Same filter as above
+credential = ManagedIdentityCredential(client_id="080f7f24-909a-4b05-a1df-8f2d71aa257f")
+token = credential.get_token("https://management.azure.com/.default")
+headers = {"Authorization": f"Bearer {token.token}", "Content-Type": "application/json"}
 
-## Step 3: Generate Report
+subscription_id = "93cba93f-571e-44e9-ac0a-a2987b58848c"
+url = f"https://management.azure.com/subscriptions/{subscription_id}/providers/Microsoft.CostManagement/query?api-version=2023-11-01"
+```
 
-Using Python (ExecutePythonCode), create:
+### Query A: 7-Day Detail (by ResourceGroup + ServiceName, Daily granularity)
 
-1. **Cost Summary Table** — Yesterday's costs by resource group and service, with subtotals
-2. **Stacked Area Chart** — 7-day daily trend by resource group (save as PNG)
-3. **Cumulative Cost Chart** — Running total over the 7-day window
-4. **Anomaly Detection** — Flag any day where total cost > 120% of the 7-day average
-5. **Key Metrics**:
-   - Yesterday's total cost
-   - 7-day average daily cost
-   - 7-day total cost
-   - Projected 30-day cost (7-day avg × 30)
+POST to the Cost Management API with:
+- timeframe: Custom, last 7 days (today minus 7 days through today)
+- granularity: Daily
+- aggregation: Sum of Cost
+- grouping: ResourceGroup AND ServiceName
+- filter: ResourceGroup In ["rg-srelab-eastus2", "mc_rg-srelab-eastus2_aks-srelab_eastus2", "rg-sre-demo-w4k9", "sre-agent-demo-2"]
+
+Save the response JSON to `/mnt/data/7day_detail.json`.
+
+### Query B: 7-Day Trend (by ResourceGroup only, Daily granularity)
+
+Same as Query A but grouping by ResourceGroup only (no ServiceName). Save to `/mnt/data/7day_trend.json`.
+
+If you get a 429 rate limit, wait 10 seconds and retry once.
+
+## Step 2: Generate Report Using Python
+
+Using ExecutePythonCode, load both JSON files and produce:
+
+1. **Identify the latest available day** — Cost data has a 24-48h billing lag, so the most recent day with data may not be yesterday. Use the latest date in the results as the "report day".
+
+2. **Cost Summary Table** — The report day's costs by resource group and service, with subtotals per resource group and a grand total. Use short names for resource groups:
+   - rg-srelab-eastus2 → rg-srelab
+   - mc_rg-srelab-eastus2_aks-srelab_eastus2 → mc_aks-srelab
+   - rg-sre-demo-w4k9 → rg-sre-demo
+   - sre-agent-demo-2 → sre-agent-demo
+
+3. **Stacked Area Chart** — 7-day daily cost trend by resource group. Include a horizontal dashed red line for the period average and a dotted line at 120% threshold. Save as `/mnt/data/daily_cost_report.png`.
+
+4. **Cumulative Cost Chart** — Running total over the 7-day window with annotated data points. Include on the same figure as a second subplot.
+
+5. **Anomaly Detection** — Flag any day where total cost exceeded 120% of the period average.
+
+6. **Key Metrics**:
+   - Report day's total cost
+   - Period average daily cost
+   - Period total cost
+   - Projected 30-day cost (period avg × 30)
    - % change vs. previous day
 
-## Step 4: Present Results
+## Step 3: Present Results
 
 Format the output as:
 
 ### Daily Azure Cost Report — {date}
 
+> Note if the report day is not yesterday due to billing lag.
+
 **Quick Stats:**
 | Metric | Value |
 |---|---|
-| Yesterday's Cost | $X.XX |
+| Report Day Cost | $X.XX |
 | 7-Day Avg | $X.XX/day |
+| Period Total | $X.XX |
 | Projected Monthly | $X.XX |
 | vs. Previous Day | +/- X.X% |
 
-Then show the chart, the detailed table, and any anomaly alerts.
-
-If any anomaly is detected (>120% of average), prominently flag it with details on which resource group and service caused the spike.
-```
+Then show the chart image, the detailed cost table, any anomaly alerts, and key observations about top cost drivers and trends.
+````
 
 ---
 
@@ -234,10 +240,12 @@ No anomalies detected.
 
 | Issue | Solution |
 |---|---|
-| Cost Management API returns 429 | The API is rate-limited. The agent will retry automatically. If persistent, increase the schedule interval. |
-| Costs show $0 for a resource group | The resource group may be empty or resources were deallocated. Check resource inventory with `az resource list`. |
-| Partial day data | Data for the current day is incomplete until the billing pipeline finalizes (~24-48 hours). Use the previous day's data for accuracy. |
-| Chart not rendering | Ensure the scheduled task has access to Python code execution. |
+| `az rest` or `az cli` commands fail | **Do not use `az rest` or `az cli`** in scheduled tasks — they are not available in the SRE Agent execution environment. Use Python with `ManagedIdentityCredential` and `requests` to call Azure REST APIs directly. |
+| Cost Management API returns 429 | The API is rate-limited. Add a 10-second sleep and retry once. If persistent, increase the schedule interval. |
+| Latest day shows $0 or lower cost | Cost data has a 24-48 hour billing lag. The report automatically uses the latest day with complete data. |
+| Costs show $0 for a resource group | The resource group may be empty or resources were deallocated. Verify via the Azure Portal or `SearchResource` tool. |
+| Chart not rendering | Ensure the scheduled task has access to Python code execution (ExecutePythonCode). matplotlib and pandas are pre-installed. |
+| Authentication errors (401/403) | Verify the managed identity client ID (`080f7f24-909a-4b05-a1df-8f2d71aa257f`) has **Cost Management Reader** role on the subscription. |
 
 ---
 
